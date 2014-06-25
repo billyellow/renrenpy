@@ -5,8 +5,8 @@ __author__ = "Mozhi Zhang (zhangmozhi@gmail.com)"
 import json
 import time
 import urllib
-import urllib2
 
+from tornado import gen, httpclient
 
 #HTTP Method code
 GET = 0
@@ -81,7 +81,7 @@ def encode_multipart(filename=None, **kw):
     params.append("--%s--\r\n" % boundary)
     return "\r\n".join(params), boundary
 
-
+@gen.coroutine
 def http_call(api_url, http_method=POST, **kw):
     """Send a HTTP request to the url and return a JSON object."""
     params = None
@@ -93,22 +93,21 @@ def http_call(api_url, http_method=POST, **kw):
 
     req = None
     if http_method == GET:
-        req = urllib2.Request("%s?%s" % (api_url, params))
-    else:
-        req = urllib2.Request(api_url, data=params)
-    if http_method == UPLOAD:
-        req.add_header("Content-Type",
-                       "multipart/form-data; boundary=%s" % boundary)
+        req = httpclient.HTTPRequest(url="%s?%s" % (api_url, params), method='GET')
+    elif http_method == POST:
+        req = httpclient.HTTPRequest(url=api_url, method='POST', body=params)
+    elif http_method == UPLOAD:
+        req = httpclient.HTTPRequest(url=api_url, method='UPLOAD', headers={"Content-Type": "multipart/form-data; boundary=%s" % boundary}, body=params)
 
     try:
-        resp = urllib2.urlopen(req)
-        content = resp.read()
+        resp = yield gen.Task(httpclient.AsyncHTTPClient().fetch, req)
+        content = resp.body
         result = json.loads(content)
         if type(result) is not list and result.get("error_code"):
             raise APIError(result.get("error_code", ""),
                            result.get("error_msg", ""))
-        return result
-    except urllib2.HTTPError as e:
+        raise gen.Return(result)
+    except httpclient.HTTPError as e:
         raise e
 
 
@@ -127,7 +126,7 @@ class APIClient:
         self.version = version
 
     def get_authorize_url(self, redirect_uri=None, scope=None,
-                          force_relogin=False):
+                          force_relogin=False, display=None):
         """Return the authorization URL."""
         redirect = redirect_uri if redirect_uri else self.redirect_uri
         params = dict(client_id=self.app_key, redirect_uri=redirect,
@@ -136,30 +135,36 @@ class APIClient:
             params["scope"] = " ".join(scope)
         if force_relogin:
             params["x_renew"] = "true"
+        if display:
+            params['display'] = display
         return "%s%s?%s" % (APIClient.OAUTH_URI, "authorize",
                             encode_params(**params))
 
+    @gen.coroutine
     def request_access_token(self, code, redirect_uri=None):
         """Return the access token as a dict.
         The dict includes access_token, expires_in, refresh_token,
         and scope.
         """
         redirect = redirect_uri if redirect_uri else self.redirect_uri
-        return http_call("%s%s" % (APIClient.OAUTH_URI, "token"), POST,
+        ret = yield gen.Task(http_call, "%s%s" % (APIClient.OAUTH_URI, "token"), POST,
                          grant_type="authorization_code", code=code,
                          client_id=self.app_key, redirect_uri=redirect,
                          client_secret=self.app_secret)
+        raise gen.Return(ret)
 
+    @gen.coroutine
     def refresh_token(self, refresh_token):
         """Return the refreshed access token as a dict.
         The dict includes access_token, expires_in, refresh_token,
         and scope.
         """
-        return http_call("%s%s" % (APIClient.OAUTH_URI, "token"), POST,
+        ret = yield gen.Task(http_call, "%s%s" % (APIClient.OAUTH_URI, "token"), POST,
                          grant_type="refresh_token",
                          refresh_token=refresh_token,
                          client_id=self.app_key,
                          client_secret=self.app_secret)
+        raise gen.Return(ret)
 
     def set_access_token(self, access_token):
         """Set access token for the API client."""
@@ -184,6 +189,7 @@ class APIWrapper:
         self.name = name
 
     def __getattr__(self, attr):
+        @gen.coroutine
         def request(**kw):
             """Send a HTTP Post request to the API server with specified
             method.
@@ -195,7 +201,8 @@ class APIWrapper:
             if not params.get("format"):
                 params["format"] = "JSON"
             http_method = UPLOAD if attr == "upload" else POST
-            return http_call(APIWrapper.API_SERVER, http_method, **params)
+            ret = yield gen.Task(http_call, APIWrapper.API_SERVER, http_method, **params)
+            raise gen.Return(ret)
 
         return request
 
@@ -212,6 +219,7 @@ class APIWrapperV2():
     def __getattr__(self, attr):
         return APIWrapperV2(self.client, "%s/%s" % (self.name, attr))
 
+    @gen.coroutine
     def __call__(self, **kw):
         """Send a HTTP Post request to the API server with specified
         method.
@@ -222,5 +230,6 @@ class APIWrapperV2():
             http_method = GET
         elif "upload" in self.name:
             http_method = UPLOAD
-        return http_call("%s/%s" % (APIWrapperV2.API_SERVER, self.name),
+        ret = yield gen.Task(http_call, "%s/%s" % (APIWrapperV2.API_SERVER, self.name),
                          http_method, **params)
+        raise gen.Return(ret)
