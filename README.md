@@ -1,17 +1,10 @@
-# 人人Python SDK
+# 人人Tornado SDK
+在Renrenpy的基础上修改而来，使得可以在Tornado中方便使用。
 
 Renrenpy 是人人 API 的一个第三方 Python SDK 。使用 OAuth 2 验证并提供了 API
 的调用方法。
 
 更新至API 2.0。
-
-## 安装
-
-本SDK支持pip安装
-
-```
-pip install renrenpy
-```
 
 
 ## OAuth2.0
@@ -45,7 +38,7 @@ scope 是应用权限列表，默认为人人默认的应用权限。可以自�
 token 。
 
 ```python
-r = client.request_access_token(AUTHORIZATION_CODE)
+r = yield gen.Task(client.request_access_token, AUTHORIZATION_CODE)
 access_token = r["access_token"]  # access token
 expires_in = r["expires_in"] # access token expires in time
 refresh_token = r["refresh_token"] # token used for refresh
@@ -57,7 +50,7 @@ client.set_access_token(access_token)
 SDK使用的是Bearer Token，有效期有一个月，若需要更新access_token可以使用上述代码中的refresh_token。
 
 ```python
-r = client.refresh_token(refresh_token)
+r = yield gen.Task(client.refresh_token, refresh_token)
 access_token = r["access_token"] # refreshed access token
 expires_in = r["expires_in"] # refreshed access token expires in time
 refresh_token = r["refresh_token"] # new refresh token
@@ -69,15 +62,15 @@ client.set_access_token(access_token)
 API 2.0 可在[人人 API 文档](http://wiki.dev.renren.com/wiki/API2)中找到。 SDK 中的 APIClient 类对所有 API 提供了方法。对于每个API，将"/"改为"."，省略v2即可调用。access_token参数由API Client提供。例如：
 
 ```python
-print client.user.get(userId="262156164")
-print client.status.put(content="test") #Requires read_user_status,status_update scopes
+yield gen.Task(client.user.get, userId="262156164")
+yield gen.Task(client.status.put, content="test") #Requires read_user_status,status_update scopes
 ```
 
 SDK 也支持上传照片 (/v2/photo/upload)
 
 ```python
 f = open("test.png", "rb")
-r = client.photo.upload(file=f, filename="test.png")
+r = yield gen.Task(client.photo.upload, file=f, filename="test.png")
 f.close()  # you need to do this manually
 ```
 
@@ -91,38 +84,32 @@ API 1.0 可在[人人 API 文档](http://wiki.dev.renren.com/wiki/API)中找到�
 例如：
 
 ```python
-print client.users.getInfo()
-print client.users.getLoggedInUser()
-print client.users.getVisitors()
-print client.friends.search(name=u"成龙")
-print client.status.set(status="test")
-print client.status.gets()
+yield gen.Task(client.users.getInfo)
+yield gen.Task(client.users.getLoggedInUser)
+yield gen.Task(client.users.getVisitors)
+yield gen.Task(client.friends.search, name=u"成龙")
+yield gen.Task(client.status.set, status="test")
+yield gen.Task(client.status.gets)
 ```
 
 SDK 也支持上传照片 (photos.upload)
 
 ```python
 f = open("test.png", "rb")
-r = client.photos.upload(upload=f, filename="test.png")
+r = yield gen.Task(client.photos.upload, upload=f, filename="test.png")
 f.close()  # you need to do this manually
 ```
 
 注意 `upload` 参数必须是个 file-like 对象。若`upload`参数没有`name`，则必须要提供一个拥有正确后缀的`filename`。
 
 
-# Renrenpy
+# RenRen Tornado SDK
+This version is modified from renrenpy.It is specially made for Tornado. 
 
-A Python SDK for Renren open platform which provides OAuth 2 authentication and API wrapper. 
+renrenpy is a Python SDK for Renren open platform which provides OAuth 2 authentication and API wrapper. 
 
 Inspired from [Sinaweibopy](https://github.com/michaelliao/sinaweibopy).
 
-## Installation
-
-You can install the SDK via pip.
-
-```
-pip install renrenpy
-```
 
 ## OAuth2.0
 
@@ -157,7 +144,7 @@ After granting the privileges, the user will be redirected to
 You can get access token using `AUTHORIZATION_CODE`.
 
 ```python
-r = client.request_access_token(AUTHORIZATION_CODE)
+r = yield gen.Task(client.request_access_token, AUTHORIZATION_CODE)
 access_token = r["access_token"]  # access token
 client.set_access_token(access_token)
 ```
@@ -167,7 +154,7 @@ Now you can call Renren API using the API client.
 This SDK uses Bearer Token, which lasts for one month.  If the access token is expired, you can use the `refresh_token` to refresh the access token.
 
 ```python
-r = client.refresh_token(refresh_token)
+r = yield gen.Task(client.refresh_token, refresh_token)
 access_token = r["access_token"] # refreshed access token
 expires_in = r["expires_in"] # refreshed access token expires in time
 refresh_token = r["refresh_token"] # new refresh token
@@ -186,19 +173,19 @@ Renren.
 For example, 
 
 ```python
-print client.users.getInfo()
-print client.users.getLoggedInUser()
-print client.users.getVisitors()
-print client.friends.search(name=u"成龙")
-print client.status.set(status="test")
-print client.status.gets()
+yield gen.Task(client.users.getInfo)
+yield gen.Task(client.users.getLoggedInUser)
+yield gen.Task(client.users.getVisitors)
+yield gen.Task(client.friends.search, name=u"成龙")
+yield gen.Task(client.status.set, status="test")
+yield gen.Task(client.status.gets)
 ```
 
 As for uploading pictures:
 
 ```python
 f = open("test.png", "rb")
-r = client.photos.upload(upload=f, filename="test.png")
+r = yield gen.Task(client.photos.upload, upload=f, filename="test.png")
 f.close()  # you need to do this manually
 ```
 
@@ -211,15 +198,15 @@ The APIs are listed at [Renren API Documentation]
 You can call an API using the APIClient's.  Remove "/v2/" and replace "/" with ".".  For example,
 
 ```python
-print client.user.get(userId="262156164")
-print client.status.put(content="test") #Requires read_user_status,status_update scopes
+yield gen.Task(client.user.get, userId="262156164")
+yield gen.Task(client.status.put, content="test") #Requires read_user_status,status_update scopes
 ```
 
 As for uploading pictures:
 
 ```python
 f = open("test.png", "rb")
-r = client.photo.upload(file=f, filename="test.png")
+r = yield gen.Task(client.photo.upload, file=f, filename="test.png")
 f.close()  # you need to do this manually
 ```
 
